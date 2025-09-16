@@ -1,0 +1,20 @@
+---
+title: "Assignment - Extra Credit"
+author: "Gabriel Arsego"
+date: "2025-09-16"
+output: html_document
+---
+```R
+set.seed(123)
+
+Train_Index = createDataPartition(Carseats$Sales, p=0.75, list=FALSE)
+
+
+Temp_data = Carseats[Train_Index, ]
+Test_data = Carseats[-Train_Index, ]
+
+Train_Validation = createDataPartition(Temp_data$Sales, p=0.66, list = FALSE)
+
+Training_data = Temp_data[Train_Validation, ]
+Validation_data = Temp_data[-Train_Validation, ]
+```
