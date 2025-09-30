@@ -1,0 +1,114 @@
+---
+title: "Assignment_2"
+author: "Garsego"
+date: "2025-09-30"
+output: html_document
+---
+```{r}
+library(caret)
+Universal_Bank <- read.csv("C:\\Users\\arseg\\Downloads\\UniversalBank.csv")
+
+View(Universal_Bank)
+```
+Transforming "Education" into a factor (categorical)
+```{r}
+Universal_Bank$Education <- as.factor(Universal_Bank$Education)
+dummy_model <- dummyVars(~Education, data = Universal_Bank)
+education_dummy <- as.data.frame(predict(dummy_model, Universal_Bank))
+```
+Replacing the "Education" column by the "education_dummy"
+```{r}
+Universal_Bank <- cbind(Universal_Bank[ , !(names(Universal_Bank) %in% "Education")],
+                        education_dummy)
+View(Universal_Bank)
+```
+Separating Personal.Loan as the target variable
+```{r}
+Target <- Universal_Bank$Personal.Loan
+Predictors <- Universal_Bank[, !(names(Universal_Bank) %in% c("ID", "ZIP.Code", "Personal.Loan"))]
+
+View(Predictors)
+```
+Here I normalize the data so that large variables don't overshadow smaller ones
+```{r}
+norm_model <- preProcess(Predictors, method = "range")
+Predictors_normalized <- predict(norm_model, Predictors)
+Universal_Bank_normalized <- cbind(Predictors_normalized, Personal.Loan = Target)
+
+Universal_Bank_normalized$Personal.Loan <- as.factor(Universal_Bank_normalized$Personal.Loan)
+View(Universal_Bank_normalized)
+```
+Partitioning data into training (60%) and validation (40%):
+```{r}
+set.seed(123)
+
+Train_Index <- createDataPartition(Universal_Bank_normalized$Personal.Loan, p = 0.6, list = FALSE)
+
+Training_data = Universal_Bank_normalized[Train_Index, ]
+Validation_data = Universal_Bank_normalized[-Train_Index, ]
+```
+Question 1
+```{r}
+knn_model1 <- train( Personal.Loan ~ ., data = Training_data, method = "knn", tuneGrid = data.frame(k = 1))
+
+Customer_1 <- data.frame( Age = 40,
+                          Experience = 10,
+                          Income = 84,
+                          Family = 2,
+                          CCAvg = 2,
+                          Mortgage = 0,
+                          Securities.Account = 0,
+                          CD.Account = 0,
+                          Online = 1,
+                          CreditCard = 1,
+                          Education.1 = 0,
+                          Education.2 = 1,
+                          Education.3 = 0)
+
+Customer_1_normalized <- predict(norm_model, Customer_1)
+View(Customer_1_normalized)
+
+Customer_1_Prediction <- predict(knn_model1, Customer_1_normalized)
+Customer_1_Prediction
+```
+Question 2
+```{r}
+knn_model2 <- train( Personal.Loan ~ ., data = Training_data, method = "knn")
+knn_model2
+```
+Question 3
+```{r}
+Best_k <- train( Personal.Loan ~ ., data = Training_data, method = "knn", tuneGrid = data.frame(k = 5))
+
+Validation_Prediction <- predict(Best_k, Validation_data)
+confusionMatrix(Validation_Prediction, as.factor(Validation_data$Personal.Loan), positive = "1")
+```
+Question 4
+```{r}
+Customer_Prediction_2 <- predict(Best_k, Customer_1_normalized)
+Customer_Prediction_2
+```
+Question 5
+```{r}
+Train_Index_2 <- createDataPartition(Universal_Bank_normalized$Personal.Loan, p = 0.8, list = FALSE)
+
+Temporary_data = Universal_Bank_normalized[Train_Index_2, ]
+Test_data = Universal_Bank_normalized[-Train_Index_2, ]
+
+Train_Validation <- createDataPartition(Temporary_data$Personal.Loan, p = 0.625, list = FALSE)
+Training_data_2 <- Temporary_data[Train_Validation, ]
+Validation_data_2 <- Temporary_data[-Train_Validation, ]
+
+knn_model3 <- train( Personal.Loan ~ ., data = Training_data_2, method = "knn", tuneGrid = data.frame(k = 5))
+knn_model3
+
+Validation_data_2_Pred <- predict(knn_model3, Validation_data_2)
+Validation_data_2_Pred
+
+Test_data_Pred <- predict(knn_model3, Test_data)
+Test_data_Pred
+
+confusionMatrix(Validation_data_2_Pred, as.factor(Validation_data_2$Personal.Loan), positive = "1")
+
+confusionMatrix(Test_data_Pred, as.factor(Test_data$Personal.Loan), positive = "1")
+```
