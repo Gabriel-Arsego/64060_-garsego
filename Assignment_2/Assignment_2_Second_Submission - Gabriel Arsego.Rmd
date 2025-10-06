@@ -1,0 +1,158 @@
+---
+title: "Assignment_2"
+author: "Garsego"
+date: "2025-10-03"
+output:
+  html_document: default
+  pdf_document: default
+---
+I start by loading the file and packages needed:
+```{r}
+Universal_Bank <- read.csv("C:\\Users\\arseg\\Downloads\\UniversalBank.csv")
+
+View(Universal_Bank)
+library(caret)
+library(ISLR)
+library(gmodels)
+```
+
+Transforming "Education" into a factor (categorical)
+```{r}
+#To do so, I used as.factor() and then created the dummy model with dummyVars()
+Universal_Bank$Education <- as.factor(Universal_Bank$Education)
+dummy_model <- dummyVars(~Education, data = Universal_Bank)
+education_dummy <- as.data.frame(predict(dummy_model, Universal_Bank))
+```
+Replacing the "Education" column by the "education_dummy"
+```{r}
+#Using cbind I replaced the Education column by the 3 columns created for the dummy model
+Universal_Bank <- cbind(Universal_Bank[ , !(names(Universal_Bank) %in% "Education")],
+                        education_dummy)
+View(Universal_Bank)
+```
+Separating Personal.Loan as the target variable
+```{r}
+#So that I don't normalize Personal.Loan which is what we are trying to predict, and also ID and ZIP.Code which aren't predictors in this situation
+Target <- Universal_Bank$Personal.Loan
+Predictors <- Universal_Bank[, !(names(Universal_Bank) %in% c("ID", "ZIP.Code", "Personal.Loan"))]
+
+View(Predictors)
+```
+Here I normalize the data so that large variables don't overshadow smaller ones in the knn model
+```{r}
+#I use preProcess() to prepare the data before modeling
+norm_model <- preProcess(Predictors, method = "range")
+#And then with predict() I apply the transformation so that each variable stays in the range from 0 to 1
+Predictors_normalized <- predict(norm_model, Predictors)
+#Once again using cbind() here to create a single data frame with the normalized variables
+Universal_Bank_normalized <- cbind(Predictors_normalized, Personal.Loan = Target)
+#Since we want to classify a customer as "loan acceptance" or not using 1 and 0 respectively, I needed to change Personal.Loan to a factor using as.factor()
+Universal_Bank_normalized$Personal.Loan <- as.factor(Universal_Bank_normalized$Personal.Loan)
+View(Universal_Bank_normalized)
+```
+Partitioning data into training (60%) and validation (40%):
+```{r}
+set.seed(123)
+#After seting seed, I partition the data using createDataPartition()
+Train_Index <- createDataPartition(Universal_Bank_normalized$Personal.Loan, p = 0.6, list = FALSE)
+
+Training_data = Universal_Bank_normalized[Train_Index, ]
+Validation_data = Universal_Bank_normalized[-Train_Index, ]
+```
+Question 1
+```{r}
+#For question 1 I needed to create a knn model using k=1, I used the train() function for that
+knn_model1 <- train( Personal.Loan ~ ., data = Training_data, method = "knn", tuneGrid = data.frame(k = 1))
+#Here I created a data frame for the Customer, making sure that I input the columns in the same order as the Universal_Bank_normalized data
+Customer_1 <- data.frame( Age = 40,
+                          Experience = 10,
+                          Income = 84,
+                          Family = 2,
+                          CCAvg = 2,
+                          Mortgage = 0,
+                          Securities.Account = 0,
+                          CD.Account = 0,
+                          Online = 1,
+                          CreditCard = 1,
+                          Education.1 = 0,
+                          Education.2 = 1,
+                          Education.3 = 0)
+#To normalize the Customer data I used predict() with norm_model
+Customer_1_normalized <- predict(norm_model, Customer_1)
+View(Customer_1_normalized)
+#And then used the knn_model1 to create the prediction
+Customer_1_Prediction <- predict(knn_model1, Customer_1_normalized)
+Customer_1_Prediction
+#This customer woud be classified as "not accepted", meaning that he wouldn't accept the personal loan offer.
+```
+Question 2
+```{r}
+#Here I used a different method from my previous submission. By creating k_choices with expand.grid() I was able to test with more k values. The reason I chose 55 as the number of tests is because of something I've found about the best value for testing being the square root of the number of observations (in this case square root of 3000). I also tried with 25 different k values, which would give me k = 1, and that doesn't seem right since it might lead to overfitting. The following code at first was giving me k = 3, but then started resulting in k = 1:
+k_choices <- expand.grid(k=seq(1, 55, 2))
+knn_model2 <- train( Personal.Loan ~ ., data = Training_data, method = "knn", tuneGrid = k_choices, trControl = trainControl(method = "cv", number = 10))
+knn_model2
+#Since k = 1 probably means overfitting, I decided to stick with what I did for my previous submission:
+knn_model2 <- train( Personal.Loan ~ ., data = Training_data, method = "knn")
+knn_model2
+#knn_model2 returns k = 5 as the best k value.
+```
+Question 3
+```{r}
+#Since k = 5 is the best k, we use it to test on the Validation_Data
+
+Best_k <- train( Personal.Loan ~ ., data = Training_data, method = "knn", tuneGrid = data.frame(k = 5))
+
+Validation_Prediction <- predict(Best_k, Validation_data)
+#For my first submission I have used confusionMatrix():
+confusionMatrix(Validation_Prediction, as.factor(Validation_data$Personal.Loan), positive = "1")
+
+#For easier visualization of the confusion matrix, I have now used CrossTable():
+CrossTable(x=Validation_Prediction, y=Validation_data$Personal.Loan, prop.chisq = FALSE)
+```
+Question 4
+```{r}
+#Using predict() we can predict that the Customer would not accept the personal loan offer:
+Customer_Prediction_2 <- predict(Best_k, Customer_1_normalized)
+Customer_Prediction_2
+```
+Question 5
+```{r}
+#Here similar to our Extra credit assignment, I created to data partitionings. 20% of Test Data, and then we are left with 80% of Temporary Data, which we need to partition in 62.5% of Training Data, and 37.5% of Validation Data (following the 50% and 30% proportion):
+Train_Index_2 <- createDataPartition(Universal_Bank_normalized$Personal.Loan, p = 0.8, list = FALSE)
+
+Temporary_data = Universal_Bank_normalized[Train_Index_2, ]
+Test_data = Universal_Bank_normalized[-Train_Index_2, ]
+
+Train_Validation <- createDataPartition(Temporary_data$Personal.Loan, p = 0.625, list = FALSE)
+Training_data_2 <- Temporary_data[Train_Validation, ]
+Validation_data_2 <- Temporary_data[-Train_Validation, ]
+
+#After partitioning the data, I have created a new model, using k = 5, since that is the best k found in question 2:
+
+knn_model3 <- train( Personal.Loan ~ ., data = Training_data_2, method = "knn", tuneGrid = data.frame(k = 5))
+knn_model3
+
+#Here I added the prediction for the Training Data, which I hadn't done in my previous submission:
+Training_data_2_Pred <- predict(knn_model3, Training_data_2)
+Training_data_2_Pred
+
+Validation_data_2_Pred <- predict(knn_model3, Validation_data_2)
+Validation_data_2_Pred
+
+Test_data_Pred <- predict(knn_model3, Test_data)
+Test_data_Pred
+
+#As I did for question 3, I have used CrossTable() to create the confusion matrix and for better visualization than the confusionMatrix() function. I have also added the confusion matrix for the Training Data:
+
+confusionMatrix(Training_data_2_Pred, as.factor(Training_data_2$Personal.Loan), positive = "1")
+CrossTable(x=Training_data_2_Pred, y=Training_data_2$Personal.Loan, prop.chisq = FALSE)
+
+confusionMatrix(Validation_data_2_Pred, as.factor(Validation_data_2$Personal.Loan), positive = "1")
+CrossTable(x=Validation_data_2_Pred, y=Validation_data_2$Personal.Loan, prop.chisq = FALSE)
+
+confusionMatrix(Test_data_Pred, as.factor(Test_data$Personal.Loan), positive = "1")
+CrossTable(x=Test_data_Pred, y=Test_data$Personal.Loan, prop.chisq = FALSE)
+```
+```{r}
+#When comparing the 3 confusion matrices, we notice that accuracy goes down from the Training Data which is highest to the lowest Test Data, and that is expected. The Validation Data and Test Data confusion matrices, show very similar performance, which indicates that the k chosen (k = 5) was a good choice. If there was a bigger difference in performance, that could indicate overfitting.
+```
