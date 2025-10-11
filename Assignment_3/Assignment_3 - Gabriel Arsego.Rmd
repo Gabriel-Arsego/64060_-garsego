@@ -1,0 +1,117 @@
+---
+title: "Assignment_3 - Gabriel Arsego"
+author: "Garsego"
+date: "2025-10-09"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(gmodels)
+library(e1071)
+library(ISLR)
+```
+
+```{r}
+set.seed(123)
+data <- read.csv("C:\\Users\\arseg\\Downloads\\UniversalBank.csv")
+```
+Partitioning the data into training (60%) and validation (40%)
+```{r}
+Index_Train <- createDataPartition(data$Personal.Loan, p = 0.6, list = F)
+Training <- data[Index_Train, ]
+Validation <- data[-Index_Train, ]
+```
+Direction A.
+```{r}
+#Creating the pivot table:
+table_train <- table(Training$CreditCard, Training$Personal.Loan, Training$Online)
+ft_table_train <- ftable(table_train)
+ft_table_train
+```
+Direction B.
+```{r}
+# For Online = 1 and CreditCard = 1
+Loan_0 <- ft_table_train[3, 2]
+Loan_1 <- ft_table_train[4, 2]
+Prob_Loan_given_CC_Online <- Loan_1 / (Loan_0 + Loan_1)
+Prob_Loan_given_CC_Online
+```
+Direction C.
+```{r}
+table_online <- table(Training$Personal.Loan, Training$Online)
+table_online
+```
+
+```{r}
+table_credit <- table(Training$Personal.Loan, Training$CreditCard)
+table_credit
+```
+Direction D.
+```{r}
+#i. P(CC = 1 | Loan = 1)
+Credit_Card_Holders = 91 / (187 + 91)
+Credit_Card_Holders
+```
+```{r}
+#ii. P(Online = 1 | Loan = 1)
+Loan_Online = 179 / (179 + 99)
+Loan_Online
+```
+```{r}
+#iii. P(Loan = 1)
+Loan_Yes = (187 + 91)/ (1930 + 792 + 187 + 91)
+Loan_Yes
+```
+```{r}
+#iv. P(CC = 1 | Loan = 0)
+Credit_No_Loan = 792 / (1930 + 792)
+Credit_No_Loan
+```
+```{r}
+#v. P(Online = 1 | Loan = 0)
+Online_No_Loan = 1620 / (1102 + 1620)
+Online_No_Loan
+```
+```{r}
+#vi. P(Loan = 0)
+Loan_No = (1930 + 792) / (1930 + 792 + 91 + 187)
+Loan_No
+```
+Direction E.
+```{r}
+#P(Loan = 1 | CC = 1, Online = 1)
+numerator <- Loan_Yes * Credit_Card_Holders * Loan_Online
+denominator <- numerator + (Loan_No * Credit_No_Loan * Online_No_Loan)
+
+Bayes_Probability <- numerator / denominator
+Bayes_Probability
+```
+Direction F.
+```{r}
+#Comparing Bayes_Probability and Prob_Loan_given_CC_Online
+Bayes_Probability
+Prob_Loan_given_CC_Online
+#The value found in Direction B is likely more accurate because it used the true observed proportion.
+```
+Direction G.
+```{r}
+#Using naive Bayes:
+naive_B_model <- naiveBayes(Personal.Loan~CreditCard+Online,
+                            data = Training)
+naive_B_model
+```
+```{r}
+new_data <- data.frame(CreditCard = 1, Online = 1)
+predict(naive_B_model, new_data, type = "raw")
+```
+```{r}
+#The second column showing 0.1156935, shows P(Loan = 1 | CC = 1, Online = 1) when using naiveBayes(). Comparing the values:
+##Direction E: 0.1105637
+##Direction G: 0.1156935
+#The values obtained are really close, meanining that the manual calculations matched the naive Bayes model.
+```
