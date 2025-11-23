@@ -1,0 +1,116 @@
+---
+title: "Assignment 5"
+author: "Gabriel Arsego"
+date: "2025-11-19"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+Cereals <- read.csv("C:/Users/arseg/Downloads/Cereals.csv")
+library(stats)
+library(cluster)
+library(caret)
+library(factoextra)
+library(ISLR)
+library(tidyverse)
+set.seed(123)
+```
+Preprocessing
+```{r}
+Cereals <- na.omit(Cereals)
+#After trying to create the dendograms many times, and failing to get a nice result, I realized that if I shortened the names of the cereals, it would be easier to vizualise the graphs:
+short_c.names <- substr(Cereals$name, 1, 20)
+#The short_c.names I will use later to name the rows for the normalized data. I'm not sure if this is the best option, but I believe that it at least improves visualization. The maximum number of characters at 20 avoids having non-unique names.
+head(Cereals)
+```
+Standardizing is necessary for hierarchical clustering, so I removed the first 3 columns that are not numeric to apply scale() to the data:
+```{r}
+Numbers <- Cereals[ ,c(4:16)]
+rownames(Numbers) <- short_c.names
+Cereals.norm <- scale(Numbers)
+head(Cereals.norm)
+```
+Next I created the dissimilarity matrix using euclidean distance, so that I could apply hclust():
+```{r}
+dm <- dist(Cereals.norm, method = "euclidean")
+hc.cereals <- hclust(dm, method = "complete")
+plot(hc.cereals, cex = 0.6, hang = -1)
+```
+Then I use Agnes with single, complete, and average linkage, and Ward, to find out which is the best method:
+```{r}
+sg.cereals <- agnes(Cereals.norm, method = "single")
+ct.cereals <- agnes(Cereals.norm, method = "complete")
+avg.cereals <- agnes(Cereals.norm, method = "average")
+wrd.cereals <- agnes(Cereals.norm, method = "ward")
+```
+Printing the Agglomerative coefficients to compare the methods:
+```{r}
+print(sg.cereals$ac)
+```
+```{r}
+print(ct.cereals$ac)
+```
+```{r}
+print(avg.cereals$ac)
+```
+```{r}
+print(wrd.cereals$ac)
+```
+The Ward method gives us the highest value for the agglomerative coefficient meaning that it has the strongest clustering structure. For that reason Ward is the best method. Next I applied pltree() to wrd.cereals to create a dendogram:
+```{r}
+pltree(wrd.cereals, cex = 0.6, hang = -1, main = "Dendogram of agnes")
+```
+```{r}
+wrd.cereals.boxes <- as.hclust(wrd.cereals)
+Cluster.wcb <- cutree(as.hclust(wrd.cereals), k = 5)
+plot(wrd.cereals.boxes, main = "Dendogram of Agnes", cex = 0.6, hang = -1)
+rect.hclust(wrd.cereals.boxes, k = 5, border = 1:5)
+#Here using cutree() I created Cluster.wcb which I inserted into the Cereals dataset, this way we can view the clusters more clearly.
+Cereals$cluster <- Cluster.wcb
+```
+My choice here was for 5 clusters. More than that would be too much, since it would separate similar observations unnecessarily, and would make it harder to understand each cluster. I thought of doing four, but then one of the clusters (the one to the right on the dendogram) would be disproportionately larger than the other ones.
+
+Now, to check stability I will follow the steps provided:
+```{r}
+Partition <- createDataPartition(Numbers$calories, p = 0.5, list = FALSE)
+A <- Numbers[Partition, ]
+B <- Numbers[-Partition, ]
+A.scale <- scale(A)
+B.scale <- scale(B)
+```
+Now clustering Partition A using Agnes clustering and k = 5.
+```{r}
+wrd.A <- agnes(A.scale, method = "ward")
+Cluster.wrd.A <- cutree(as.hclust(wrd.A), k = 5)
+A$cluster <- Cluster.wrd.A
+```
+NOTE: For the question asking to check stability, I did as much as I could. From this part on, I am not sure how to proceed: "- Use the cluster centroids from A to assign each record in partition B (each record is assigned to the cluster with the closest centroid).
+- Assess how consistent the cluster assignments are compared to the assignments based on all the data."
+
+To find a cluster of "healthy cereals", I will use only the variables related to health indicators (removing shelf and rating for example):
+```{r}
+Health.cereals <- Numbers[ ,c(1:9)]
+rownames(Health.cereals) <- short_c.names
+```
+Now, doing the same process as earlier, I will try to find the best method to cluster this dataset:
+```{r}
+sg.cereals2 <- agnes(Health.cereals, method = "single")
+ct.cereals2 <- agnes(Health.cereals, method = "complete")
+avg.cereals2 <- agnes(Health.cereals, method = "average")
+wrd.cereals2 <- agnes(Health.cereals, method = "ward")
+print(sg.cereals2$ac)
+print(ct.cereals2$ac)
+print(avg.cereals2$ac)
+print(wrd.cereals2$ac)
+```
+"Ward" is the best method again. So, I'll use that method to create the Agnes Dendogram:
+```{r}
+Healthy.wrd <- as.hclust(wrd.cereals2)
+plot(Healthy.wrd, main = "Dendogram of Healthy Agnes", cex = 0.6, hang = -1)
+rect.hclust(Healthy.wrd, k = 5, border = 1:5)
+Cluster.Healthy.wrd <- cutree(as.hclust(wrd.cereals2), k = 5)
+Health.cereals$cluster <- Cluster.Healthy.wrd
+```
+Cluster 2 seems to contain the healthiest options, having less sodium, fat and sugar. For this analysis, I haven't normalized the data. I believe a physician or a nutritionist would have more knowledge of the impacts of each variable in our bodies and would know how to weight each variable in a more appropriate manner. So, for the question of "Should the data be normalized?", my answer would be "It depends."
